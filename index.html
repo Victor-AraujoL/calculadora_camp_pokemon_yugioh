@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Calculadora de Campeonato — Pokémon / Yu-Gi-Oh!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#101218;--panel:#191c25;--panel2:#20242f;--border:#353b49;
+  --accent:#e7b93f;--accent2:#9a7a22;--text:#f2f2ed;--muted:#a6adbd;
+  --danger:#e15c61;--success:#58b27f;--blue:#5c9be8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:Inter,sans-serif;min-height:100vh;padding-bottom:50px}
+header{text-align:center;padding:20px 16px 18px;border-bottom:1px solid var(--border);margin-bottom:20px}
+header h1{font:700 22px Cinzel,serif;color:var(--accent);margin:0 0 5px}
+header p{font-size:11px;color:var(--muted);margin:0;text-transform:uppercase;letter-spacing:.12em}
+.wrap{max-width:620px;margin:auto;padding:0 15px}
+.card,.match{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:17px;margin-bottom:13px}
+h2,h3{font-family:Cinzel,serif;margin:0 0 8px}
+h2{font-size:19px} h3{font-size:14px;color:var(--accent)}
+label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 6px}
+input,select{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:11px 12px;border-radius:8px;font:15px Inter,sans-serif;margin-bottom:13px}
+input:focus,select:focus{outline:none;border-color:var(--accent2)}
+.btn{display:block;width:100%;background:var(--accent);color:#17130a;border:0;padding:12px;border-radius:8px;font:700 14px Inter,sans-serif;cursor:pointer;margin-top:7px}
+.btn.secondary{background:transparent;border:1px solid var(--accent2);color:var(--accent)}
+.btn.ghost{background:transparent;border:1px solid var(--border);color:var(--muted)}
+.btn.small{width:auto;display:inline-block;padding:9px 12px;font-size:12px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hint,.note{font-size:12px;line-height:1.5;color:var(--muted)}
+.note{background:var(--panel2);border-left:3px solid var(--accent2);padding:10px 12px;border-radius:6px;margin:10px 0 14px}
+.error{color:var(--danger);font-size:12px;margin:3px 0 10px}
+.badge{display:inline-block;background:var(--panel2);border:1px solid var(--border);color:var(--muted);font-size:10px;padding:4px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:9px}
+.badge.gold{color:var(--accent);border-color:var(--accent2)}
+.timer{font:700 52px Cinzel,serif;text-align:center;color:var(--accent);margin:5px 0 7px;letter-spacing:.03em}
+.timer.done{color:var(--danger)}
+.timer-row{display:flex;gap:9px}.timer-row .btn:first-child{flex:1}
+.match-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}
+.match-head h3{margin:0}
+.player-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px}
+.player-row:last-child{border-bottom:0}
+.pts{color:var(--accent);font-size:12px;font-weight:700}
+.vs{text-align:center;color:var(--muted);font-size:11px;padding:4px 0}
+.bye{border-color:var(--accent2)}
+.radio{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--border);font-size:14px}
+.radio:last-child{border-bottom:0}.radio input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:7px 4px;border-bottom:1px solid var(--border)}
+td{padding:8px 4px;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:0}
+.rank1{color:var(--accent);font-weight:700}
+.center{text-align:center}
+.champion{text-align:center;padding:28px 15px}
+.champion .cup{font-size:43px}.champion h2{font-size:25px;color:var(--accent)}
+.subtle{font-size:11px;color:var(--muted)}
+.turn-box{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:11px;margin-top:10px}
+.turn-box strong{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="header-title">Campeonato</h1>
+</header>
+<div class="wrap" id="app"></div>
+
+<script>
+const app=document.getElementById('app');
+
+const state={
+  screen:'setup', championshipName:'', game:'pokemon', mode:'MD3', n:8, rounds:3, minutes:50,
+  players:[], currentRound:1, matches:[], results:{}, timerSeconds:0,
+  timerRunning:false, timerInterval:null, champion:[], byeHistory:[], // champion agora é um array
+  tiebreak:false, showTiebreak:false, decider:null
+};
+
+function esc(s){
+  return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+}
+function shuffle(a){
+  a=a.slice();
+  for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
+  return a;
+}
+function fmt(s){return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')}
+function player(id){return state.players.find(p=>p.id===id)}
+function name(id){return player(id)?.name||'?'}
+function playedAgainst(a,b){return player(a)?.opponents.includes(b)||false}
+function matchPoints(result){
+  if(result==='win') return [3,0];
+  if(result==='draw') return [1,1];
+  return [0,0];
+}
+function getTiebreak(p){
+  return p.opponents.reduce((sum,id)=>{
+    const o=player(id); return sum+(o?o.points:0);
+  },0);
+}
+function standings(){
+  return state.players.slice().sort((a,b)=>{
+    if(b.points!==a.points) return b.points-a.points;
+    const tb=getTiebreak(b)-getTiebreak(a);
+    if(tb!==0) return tb;
+    return a.name.localeCompare(b.name,'pt-BR');
+  });
+}
+
+function pairRound(){
+  const ids=state.players.map(p=>p.id);
+  let ordered=state.currentRound===1 ? shuffle(ids) : standings().map(p=>p.id);
+
+  let bye=null;
+  if(ordered.length%2){
+    const candidates=ordered.slice().reverse().filter(id=>!state.byeHistory.includes(id));
+    bye=candidates.length?candidates[0]:ordered[ordered.length-1];
+    ordered=ordered.filter(id=>id!==bye);
+  }
+
+  function backtrack(list, pairs){
+    if(list.length===0) return pairs;
+    const a=list[0];
+    const candidates=list.slice(1).filter(b=>!playedAgainst(a,b));
+    for(const b of candidates){
+      const next=list.filter(x=>x!==a&&x!==b);
+      const out=backtrack(next,pairs.concat([[a,b]]));
+      if(out) return out;
+    }
+    return null;
+  }
+
+  let pairs=backtrack(ordered,[]);
+  if(!pairs){
+    const remaining=ordered.slice(), fallback=[];
+    while(remaining.length){
+      const a=remaining.shift();
+      let idx=remaining.findIndex(b=>!playedAgainst(a,b));
+      if(idx<0) idx=0;
+      const b=remaining.splice(idx,1)[0];
+      fallback.push([a,b]);
+    }
+    pairs=fallback;
+  }
+
+  state.matches=pairs;
+  state.results={};
+  state.byeHistory=bye?[...state.byeHistory,bye]:state.byeHistory;
+  state.timerSeconds=state.minutes*60;
+  state.timerRunning=false;
+  clearInterval(state.timerInterval);
+  state.screen='round';
+  render();
+}
+
+function startRound(r){
+  state.currentRound=r;
+  pairRound();
+}
+function toggleTimer(){
+  if(state.timerRunning){
+    clearInterval(state.timerInterval);state.timerRunning=false;render();
+  }else{
+    state.timerRunning=true;
+    state.timerInterval=setInterval(()=>{
+      if(state.timerSeconds>0){state.timerSeconds--;updateTimer()}
+      else{clearInterval(state.timerInterval);state.timerRunning=false;render()}
+    },1000);
+    render();
+  }
+}
+function resetTimer(){
+  clearInterval(state.timerInterval);state.timerRunning=false;state.timerSeconds=state.minutes*60;render();
+}
+function updateTimer(){
+  const e=document.getElementById('timer');
+  if(e){e.textContent=fmt(state.timerSeconds);e.className='timer'+(state.timerSeconds===0?' done':'')}
+}
+function finishTimer(){
+  if(state.game==='pokemon'){
+    const e=document.getElementById('timeout-note');
+    if(e)e.innerHTML='<strong>Tempo encerrado.</strong> Turno 0 = jogador 1 (finalize o turno em andamento), depois turno 1 = jogador 2, turno 2 = jogador 1 e turno 3 = jogador 2. Se ninguém vencer, registre empate.';
+  }else{
+    const e=document.getElementById('timeout-note');
+    if(e)e.innerHTML='<strong>Tempo encerrado.</strong> No Yu-Gi-Oh!, conforme a regra definida neste campeonato, registre <strong>derrota dupla</strong>.';
+  }
+}
+function goResults(){
+  clearInterval(state.timerInterval);state.timerRunning=false;
+  state.matches.forEach((m,i)=>{
+    if(!state.results[i]) state.results[i]={result:null,winner:null};
+  });
+  state.screen='results';render();
+}
+function setResult(i,r,w){
+  state.results[i]={result:r,winner:w||null};
+}
+function confirmResults(){
+  for(let i=0;i<state.matches.length;i++){
+    if(!state.results[i]||!state.results[i].result){
+      showError('Registre o resultado de todas as partidas.');return;
+    }
+    if(state.results[i].result==='win'&&!state.results[i].winner){
+      showError('Selecione o vencedor de todas as vitórias.');return;
+    }
+  }
+  state.matches.forEach((m,i)=>{
+    const r=state.results[i];
+    if(r.result==='win'){
+      const loser=m[0]===r.winner?m[1]:m[0];
+      player(r.winner).points+=3; player(loser).points+=0;
+    }else if(r.result==='draw'){
+      player(m[0]).points+=1;player(m[1]).points+=1;
+    }
+    player(m[0]).opponents.push(m[1]);player(m[1]).opponents.push(m[0]);
+  });
+  if(state.byeHistory.length && state.byeHistory[state.byeHistory.length-1]){
+    const b=player(state.byeHistory[state.byeHistory.length-1]);
+    if(b && !b.byeCountedForRound.includes(state.currentRound)){
+      b.byeCount++;
+      b.byeCountedForRound.push(state.currentRound);
+      b.points+=3;
+    }
+  }
+  state.screen='standings';render();
+}
+function showError(msg){const e=document.getElementById('err');if(e)e.textContent=msg}
+function next(){
+  if(state.currentRound<state.rounds) startRound(state.currentRound+1);
+  else finishChampionship();
+}
+function finishChampionship(){
+  const s=standings();
+  const top=s[0], tied=s.filter(p=>p.points===top.points&&getTiebreak(p)===getTiebreak(top));
+  if(tied.length>1){
+    state.decider=tied.map(p=>p.id);
+    state.screen='decider-question';render();
+  }else{
+    state.champion=[top];
+    state.screen='champion';render();
+  }
+}
+
+function render(){
+  document.getElementById('header-title').textContent =
+    state.championshipName ? 'Campeonato ' + state.championshipName : 'Campeonato';
+  if(state.screen==='setup')return renderSetup();
+  if(state.screen==='names')return renderNames();
+  if(state.screen==='round')return renderRound();
+  if(state.screen==='results')return renderResults();
+  if(state.screen==='standings')return renderStandings();
+  if(state.screen==='decider-question')return renderDeciderQuestion();
+  if(state.screen==='decider-setup')return renderDeciderSetup();
+  if(state.screen==='decider-round')return renderDeciderRound();
+  if(state.screen==='decider-results')return renderDeciderResults();
+  if(state.screen==='champion')return renderChampion();
+}
+
+function renderSetup(){
+  app.innerHTML=`
+  <div class="card">
+    <h2>Configurar campeonato</h2>
+    <label>Nome do campeonato</label>
+    <input type="text" id="championship" placeholder="Ex.: Campeonato GV 2026">
+    <label>Jogo</label>
+    <select id="game">
+      <option value="pokemon" ${state.game==='pokemon'?'selected':''}>Pokémon TCG</option>
+      <option value="yugioh" ${state.game==='yugioh'?'selected':''}>Yu-Gi-Oh! TCG</option>
+    </select>
+    <label>Modalidade</label>
+    <select id="mode">
+      <option ${state.mode==='MD3'?'selected':''}>MD3</option>
+      <option ${state.mode==='MD1'?'selected':''}>MD1</option>
+    </select>
+    <div class="row2">
+      <div><label>Jogadores</label><input type="number" id="n" min="2" max="128" value="${state.n}"></div>
+      <div><label>Rodadas</label><input type="number" id="rounds" min="1" max="20" value="${state.rounds}"></div>
+    </div>
+    <label>Duração da rodada (minutos)</label>
+    <input type="number" id="minutes" min="1" max="180" value="${state.minutes}">
+    <div class="note" id="rules"></div>
+    <div id="err" class="error"></div>
+    <button class="btn" id="continue">Continuar</button>
+  </div>`;
+  const updateRules=()=>{
+    state.game=document.getElementById('game').value;
+    document.getElementById('rules').innerHTML=state.game==='pokemon'
+      ? '<strong>Pokémon:</strong><br> Vitória = 3 pts<br>Empate = 1 pt<br>Derrota = 0 pt<br> Tempo encerrado é jogado:<br>Turno 0 (J1) - Continuação do turno de quem ja estava jogando<br>Turno 1 (J2)<br>Turno 2 (J1)<br>Turno 3 (J2).<br> Sem vencedor = empate = 0 pt cada'
+      : '<strong>Yu-Gi-Oh!:</strong> <br>Vitória = 3 pts<br>Empate = 1 pt<br>Derrota = 0 pt<br> Tempo encerrado = derrota dupla = 0 pt cada';
+  };
+  document.getElementById('game').addEventListener('change',updateRules);updateRules();
+  document.getElementById('continue').onclick=()=>{
+    state.championshipName=document.getElementById('championship').value.trim();
+    state.game=document.getElementById('game').value;
+    state.mode=document.getElementById('mode').value;
+    state.n=parseInt(document.getElementById('n').value)||0;
+    state.rounds=parseInt(document.getElementById('rounds').value)||0;
+    state.minutes=parseInt(document.getElementById('minutes').value)||0;
+    if(!state.championshipName){showError('Informe o nome do campeonato.');return}
+    if(state.n<2||state.n>128){showError('Informe de 2 a 128 jogadores.');return}
+    if(state.rounds<1||state.rounds>20){showError('Informe de 1 a 20 rodadas.');return}
+    if(state.minutes<1||state.minutes>180){showError('Informe uma duração válida.');return}
+    state.players=Array.from({length:state.n},(_,i)=>({
+      id:'p'+i,name:'',points:0,opponents:[],byeCount:0,byeCountedForRound:[]
+    }));
+    state.byeHistory=[];state.currentRound=1;state.champion=[];
+    state.screen='names';render();
+  };
+}
+function renderNames(){
+  app.innerHTML=`
+  <div class="card">
+    <div class="badge gold">${state.game==='pokemon'?'Pokémon TCG':'Yu-Gi-Oh! TCG'} · ${state.mode}</div>
+    <h2>Jogadores</h2>
+    <div class="hint">Digite o nome ou apelido de cada participante.</div><br>
+    ${state.players.map((p,i)=>`<input id="p${i}" type="text" placeholder="Jogador ${i+1}" value="${esc(p.name)}">`).join('')}
+    <div id="err" class="error"></div>
+    <button class="btn ghost" id="back">Voltar</button>
+    <button class="btn" id="start">Sortear rodada 1</button>
+  </div>`;
+  document.getElementById('back').onclick=()=>{state.screen='setup';render()};
+  document.getElementById('start').onclick=()=>{
+    let ok=true;
+    state.players.forEach((p,i)=>{p.name=document.getElementById('p'+i).value.trim();if(!p.name)ok=false});
+    if(!ok){showError('Preencha o nome de todos os jogadores.');return}
+    startRound(1);
+  };
+}
+function renderRound(){
+  const bye=state.matches.length*2<state.players.length?state.players.find(p=>state.byeHistory.includes(p.id)&&!p.byeCountedForRound.includes(state.currentRound)):null;
+  app.innerHTML=`
+  <div class="badge gold">Rodada ${state.currentRound} de ${state.rounds}</div>
+  <div class="card">
+    <div id="timer" class="timer${state.timerSeconds===0?' done':''}">${fmt(state.timerSeconds)}</div>
+    <div class="timer-row">
+      <button class="btn secondary" id="toggle">${state.timerRunning?'Pausar':'Iniciar cronômetro'}</button>
+      <button class="btn ghost" id="reset">Zerar</button>
+    </div>
+    <div id="timeout-note" class="note">${state.game==='pokemon'
+      ? 'Quando o tempo acabar:<br> Turno 0 = jogador 1<br> Turno 1 = jogador 2<br> Turno 2 = jogador 1<br> Turno 3 = jogador 2'
+      : 'Quando o tempo acabar, a partida é registrada como derrota dupla, conforme a regra deste campeonato.'}</div>
+    <button class="btn" id="results">Registrar resultados</button>
+  </div>
+  ${state.matches.map((m,i)=>`
+    <div class="match">
+      <div class="match-head"><h3>Partida ${i+1}</h3><span class="subtle">${state.mode}</span></div>
+      <div class="player-row"><span>${esc(name(m[0]))}</span><span class="pts">${player(m[0]).points} pts</span></div>
+      <div class="vs">VS</div>
+      <div class="player-row"><span>${esc(name(m[1]))}</span><span class="pts">${player(m[1]).points} pts</span></div>
+    </div>`).join('')}
+  ${state.byeHistory.length&&player(state.byeHistory[state.byeHistory.length-1])?`
+    <div class="match bye"><h3>BYE</h3><div class="hint"><strong>${esc(name(state.byeHistory[state.byeHistory.length-1]))}</strong> recebe vitória automática (3 pontos). O BYE vale <strong>0</strong> para o desempate.</div></div>`:''}`;
+  document.getElementById('toggle').onclick=toggleTimer;
+  document.getElementById('reset').onclick=resetTimer;
+  document.getElementById('results').onclick=goResults;
+}
+function renderResults(){
+  app.innerHTML=`
+  <div class="badge gold">Resultados · Rodada ${state.currentRound}</div>
+  <div class="note">${state.game==='pokemon'
+    ? '<strong>Pokémon:</strong> selecione vitória, empate ou derrota. Se o tempo terminou sem vencedor após os turnos 0–3, registre empate.'
+    : '<strong>Yu-Gi-Oh!:</strong> se o tempo terminou, use “Derrota dupla”.'}</div>
+  ${state.matches.map((m,i)=>{
+    const r=state.results[i]||{result:null,winner:null};
+    return `<div class="match">
+      <div class="match-head"><h3>${esc(name(m[0]))} x ${esc(name(m[1]))}</h3></div>
+      <label class="radio"><input type="radio" name="r${i}" ${r.result==='win'?'checked':''} onchange="setResult(${i},'win')"> Vitória</label>
+      <label class="radio"><input type="radio" name="r${i}" ${r.result==='draw'?'checked':''} onchange="setResult(${i},'draw')"> Empate</label>
+      ${state.game==='yugioh'?`<label class="radio"><input type="radio" name="r${i}" ${r.result==='double'?'checked':''} onchange="setResult(${i},'double')"> Derrota dupla</label>`:''}
+      <div id="winner-${i}" style="margin-top:8px"></div>
+    </div>`;
+  }).join('')}
+  <div id="err" class="error"></div>
+  <button class="btn" id="confirm">Confirmar rodada</button>`;
+  state.matches.forEach((m,i)=>renderWinner(i));
+  document.getElementById('confirm').onclick=confirmResults;
+}
+function renderWinner(i){
+  const body=document.getElementById('winner-'+i),r=state.results[i];
+  if(!r||r.result!=='win'){body.innerHTML='';return}
+  const m=state.matches[i];
+  body.innerHTML=`<label>Vencedor</label>${m.map(pid=>`
+    <label class="radio"><input type="radio" name="w${i}" ${r.winner===pid?'checked':''} onchange="setResult(${i},'win','${pid}')"> ${esc(name(pid))}</label>`).join('')}`;
+}
+const oldSetResult=setResult;
+setResult=(i,r,w)=>{oldSetResult(i,r,w);renderResults()};
+function renderStandings(){
+  const s=standings();
+  const isFinal=state.currentRound>=state.rounds;
+  app.innerHTML=`
+  <div class="badge gold">${isFinal?'Classificação final':'Classificação após rodada '+state.currentRound}</div>
+  <div class="card">
+    <table id="standings-table">
+      <tr><th>#</th><th>Jogador</th><th>Pts</th>${isFinal&&state.showTiebreak?' <th>Desempate</th>':''}</tr>
+      ${s.map((p,i)=>`<tr><td class="${i===0?'rank1':''}">${i+1}</td><td class="${i===0?'rank1':''}">${esc(p.name)}</td><td class="${i===0?'rank1':''}">${p.points}</td>${isFinal&&state.showTiebreak?`<td>${getTiebreak(p)}</td>`:''}</tr>`).join('')}
+    </table>
+    ${isFinal?`<label class="radio" style="margin-top:10px;border-bottom:0"><input type="checkbox" id="show-tiebreak" ${state.showTiebreak?'checked':''}> Mostrar pontos de desempate</label>`:''}
+  </div>
+  <button class="btn" id="next">${isFinal?'Finalizar campeonato':'Iniciar rodada '+(state.currentRound+1)}</button>`;
+  if(isFinal){
+    document.getElementById('show-tiebreak').onchange=e=>{state.showTiebreak=e.target.checked;renderStandings()};
+  }
+  document.getElementById('next').onclick=()=>isFinal?finishChampionship():next();
+}
+function renderDeciderQuestion(){
+  const names=state.decider.map(id=>name(id));
+  app.innerHTML=`
+  <div class="card">
+    <div class="badge gold">Empate na classificação final</div>
+    <h2>Desempate necessário</h2>
+    <div class="hint">Após pontos e desempate, continuam empatados:</div>
+    <div class="note"><strong>${names.map(esc).join(' · ')}</strong></div>
+    <div class="hint">Deseja realizar uma partida final de desempate ou consagrar os empatados como campeões?</div>
+    <button class="btn" id="yes">Sim, partida de desempate</button>
+    <button class="btn secondary" id="no">Não, consagrar os campeões</button>
+  </div>`;
+  document.getElementById('yes').onclick=()=>{state.screen='decider-setup';render()};
+  document.getElementById('no').onclick=()=>{
+    // Aqui nós transformamos todos os empatados em campeões
+    state.champion = state.decider.map(id => player(id));
+    state.screen='champion';render();
+  };
+}
+function renderDeciderSetup(){
+  app.innerHTML=`
+  <div class="card">
+    <div class="badge gold">Partida decisiva</div>
+    <h2>Definir campeão</h2>
+    <div class="hint">${state.decider.map(id=>esc(name(id))).join(' · ')}</div>
+    <label>Duração (minutos)</label>
+    <input id="decmin" type="number" min="1" max="180" value="${state.minutes}">
+    <div class="note">${state.game==='pokemon'
+      ? 'A partida segue as regras de tempo do Pokémon configuradas para este campeonato.'
+      : 'No Yu-Gi-Oh!, tempo encerrado resulta em derrota dupla. Se ocorrer, registre o resultado de acordo com a regra definida.'}</div>
+    <button class="btn" id="go">Iniciar partida decisiva</button>
+  </div>`;
+  document.getElementById('go').onclick=()=>{
+    state.deciderMinutes=parseInt(document.getElementById('decmin').value)||state.minutes;
+    state.timerSeconds=state.deciderMinutes*60;state.timerRunning=false;state.deciderResult=null;
+    state.screen='decider-round';render();
+  };
+}
+function renderDeciderRound(){
+  app.innerHTML=`
+  <div class="badge gold">Partida decisiva</div>
+  <div class="card">
+    <div id="timer" class="timer${state.timerSeconds===0?' done':''}">${fmt(state.timerSeconds)}</div>
+    <div class="timer-row"><button class="btn secondary" id="toggle">${state.timerRunning?'Pausar':'Iniciar cronômetro'}</button><button class="btn ghost" id="reset">Zerar</button></div>
+    <div class="note">${state.game==='pokemon'?'Tempo Pokémon: turno 0 (J1), turno 1 (J2), turno 2 (J1), turno 3 (J2).':'Yu-Gi-Oh!: tempo encerrado = derrota dupla.'}</div>
+    <button class="btn" id="result">Registrar resultado</button>
+  </div>
+  <div class="match"><h3>Participantes</h3>${state.decider.map(id=>`<div class="player-row"><span>${esc(name(id))}</span></div>`).join('')}</div>`;
+  document.getElementById('toggle').onclick=toggleDeciderTimer;
+  document.getElementById('reset').onclick=()=>{clearInterval(state.timerInterval);state.timerRunning=false;state.timerSeconds=state.deciderMinutes*60;render()};
+  document.getElementById('result').onclick=()=>{clearInterval(state.timerInterval);state.timerRunning=false;state.screen='decider-results';render()};
+}
+function toggleDeciderTimer(){
+  if(state.timerRunning){clearInterval(state.timerInterval);state.timerRunning=false;render()}
+  else{state.timerRunning=true;state.timerInterval=setInterval(()=>{if(state.timerSeconds>0){state.timerSeconds--;updateTimer()}else{clearInterval(state.timerInterval);state.timerRunning=false;render()}},1000);render()}
+}
+function renderDeciderResults(){
+  app.innerHTML=`
+  <div class="card">
+    <div class="badge gold">Resultado decisivo</div>
+    <h2>Quem venceu?</h2>
+    ${state.decider.map(id=>`<label class="radio"><input type="radio" name="dw" value="${id}"> ${esc(name(id))}</label>`).join('')}
+    <div class="note">${state.game==='yugioh'?'Se terminou em derrota dupla, selecione o procedimento que vocês adotaram para sanar o empate.':'Se terminou sem vencedor após os turnos de tempo, escolha como vocês desejam resolver o empate decisivo.'}</div>
+    <div id="err" class="error"></div>
+    <button class="btn" id="confirm">Confirmar campeão</button>
+  </div>`;
+  document.getElementById('confirm').onclick=()=>{
+    const w=document.querySelector('input[name="dw"]:checked');
+    if(!w){showError('Selecione o vencedor.');return}
+    state.champion=[player(w.value)];
+    state.screen='champion';render();
+  };
+}
+function renderChampion(){
+  const s=standings();
+  const champNames = state.champion.map(c => esc(c.name)).join(' & ');
+  const title = state.champion.length > 1 ? 'Campeões do campeonato' : 'Campeão do campeonato';
+  app.innerHTML=`
+  <div class="card champion">
+    <div class="cup">🏆</div>
+    <h2>${champNames}</h2>
+    <div class="subtle">${title}</div>
+  </div>
+  <div class="card">
+    <h3>Classificação final</h3>
+    <table>
+      <tr><th>#</th><th>Jogador</th><th>Pts</th><th>Desempate</th></tr>
+      ${s.map((p,i)=>`<tr><td class="${i===0?'rank1':''}">${i+1}</td><td class="${i===0?'rank1':''}">${esc(p.name)}</td><td class="${i===0?'rank1':''}">${p.points}</td><td>${getTiebreak(p)}</td></tr>`).join('')}
+    </table>
+  </div>
+  <button class="btn secondary" id="new">Novo campeonato</button>`;
+  document.getElementById('new').onclick=()=>location.reload();
+}
+render();
+</script>
+</body>
+</html>
